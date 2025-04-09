@@ -1,5 +1,24 @@
 import discord
+import json
+import os
 from discord.ext import commands
+
+GIF_ROLE_FILE = "gif_roles.json"
+
+# Load existing data
+if os.path.exists(GIF_ROLE_FILE):
+    with open(GIF_ROLE_FILE, "r") as f:
+        gif_block_roles = json.load(f)
+        # Convert keys back to int (JSON only stores them as strings)
+        gif_block_roles = {int(k): v for k, v in gif_block_roles.items()}
+else:
+    gif_block_roles = {}
+
+def save_gif_roles():
+    with open(GIF_ROLE_FILE, "w") as f:
+        json.dump(gif_block_roles, f)
+
+
 
 print(discord.__version__)
 
@@ -23,6 +42,7 @@ async def on_ready():
 @commands.has_permissions(administrator=True)
 async def setgifblockrole(ctx, role: discord.Role):
     gif_block_roles[ctx.guild.id] = role.id
+    save_gif_roles()
     await ctx.send(f"✅ GIF block role set to: {role.mention}")
 
 @bot.command()
@@ -30,6 +50,7 @@ async def setgifblockrole(ctx, role: discord.Role):
 async def removegifblockrole(ctx):
     if ctx.guild.id in gif_block_roles:
         removed_id = gif_block_roles.pop(ctx.guild.id)
+        save_gif_roles()
         await ctx.send(f"🧹 GIF block role removed (Role ID: `{removed_id}`).")
     else:
         await ctx.send("⚠️ No GIF block role is currently set for this server.")
