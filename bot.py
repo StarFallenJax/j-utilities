@@ -9,14 +9,13 @@ GIF_ROLE_FILE = "gif_roles.json"
 if os.path.exists(GIF_ROLE_FILE):
     with open(GIF_ROLE_FILE, "r") as f:
         gif_block_roles = json.load(f)
-        # Convert keys back to int (JSON only stores them as strings)
-        gif_block_roles = {int(k): v for k, v in gif_block_roles.items()}
+        # Ensure each guild has a list (even if empty)
+        for guild_id in gif_block_roles:
+            if not isinstance(gif_block_roles[guild_id], list):
+                gif_block_roles[guild_id] = []
 else:
     gif_block_roles = {}
 
-def save_gif_roles():
-    with open(GIF_ROLE_FILE, "w") as f:
-        json.dump(gif_block_roles, f)
 
 
 
@@ -40,29 +39,47 @@ async def on_ready():
 # Command to set the role that gets GIFs blocked
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def setgifblockrole(ctx, role: discord.Role):
-    gif_block_roles[ctx.guild.id] = role.id
+async def setgifblockrole(ctx, *roles: discord.Role):
+    if ctx.guild.id not in gif_block_roles:
+        gif_block_roles[ctx.guild.id] = []
+
+    for role in roles:
+        if role.id not in gif_block_roles[ctx.guild.id]:
+            gif_block_roles[ctx.guild.id].append(role.id)
+    
     save_gif_roles()
-    await ctx.send(f"✅ GIF block role set to: {role.mention}")
+    role_mentions = ', '.join([role.mention for role in roles])
+    await ctx.send(f"✅ GIF block roles set to: {role_mentions}")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def removegifblockrole(ctx):
+async def removegifblockrole(ctx, *roles: discord.Role):
     if ctx.guild.id in gif_block_roles:
-        removed_id = gif_block_roles.pop(ctx.guild.id)
-        save_gif_roles()
-        await ctx.send(f"🧹 GIF block role removed (Role ID: `{removed_id}`).")
+        removed_roles = []
+        for role in roles:
+            if role.id in gif_block_roles[ctx.guild.id]:
+                gif_block_roles[ctx.guild.id].remove(role.id)
+                removed_roles.append(role)
+        
+        if removed_roles:
+            save_gif_roles()
+            removed_mentions = ', '.join([role.mention for role in removed_roles])
+            await ctx.send(f"🧹 GIF block roles removed: {removed_mentions}")
+        else:
+            await ctx.send("⚠️ No such roles are currently blocking GIFs.")
     else:
-        await ctx.send("⚠️ No GIF block role is currently set for this server.")
+        await ctx.send("⚠️ No GIF block roles are currently set.")
+
 
 @bot.command()
 async def showgifblockrole(ctx):
-    role_id = gif_block_roles.get(ctx.guild.id)
-    if role_id:
-        role = ctx.guild.get_role(role_id)
-        await ctx.send(f"🎯 Current blocked role: {role.mention}")
+    if ctx.guild.id in gif_block_roles and gif_block_roles[ctx.guild.id]:
+        roles = [ctx.guild.get_role(role_id) for role_id in gif_block_roles[ctx.guild.id]]
+        role_mentions = ', '.join([role.mention for role in roles if role])  # Mention all valid roles
+        await ctx.send(f"🎯 Current blocked roles: {role_mentions}")
     else:
-        await ctx.send("❌ No GIF-blocked role set.")
+        await ctx.send("❌ No GIF-blocked roles set.")
+
 
 @bot.command(name="help")
 async def help_command(ctx):
@@ -81,12 +98,12 @@ async def help_command(ctx):
 @bot.event
 async def on_message(message):
     if message.author.bot or not message.guild:
-        return
+        return  # Ignore bots and DMs
 
     guild_id = message.guild.id
-    target_role_id = gif_block_roles.get(guild_id)
+    target_role_ids = gif_block_roles.get(guild_id, [])
 
-    if target_role_id and any(role.id == target_role_id for role in message.author.roles):
+    if any(role.id in target_role_ids for role in message.author.roles):
         # Check for .gif in attachments
         for attachment in message.attachments:
             if attachment.content_type == "image/gif" or attachment.filename.endswith(".gif"):
@@ -130,7 +147,8 @@ async def on_message(message):
             print(f'Deleted a Tenor link from {message.author}')
             return
 
-    await bot.process_commands(message) # Keep commands working
+    await bot.process_commands(message)
+
 
 # Run the bot
 bot.run('MTM1OTYwNzU5NDIzNDE1NTE5OQ.Gp8qkf.kRigwfvJUirmemXe48fKmP3mtVb5jJBjHg1EyE')
