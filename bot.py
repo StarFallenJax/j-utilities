@@ -70,7 +70,11 @@ async def help_command(ctx):
         "**📘 Bot Commands:**\n\n"
         "**!setgifblockrole @Role** — Set a role whose messages containing GIFs will be auto-deleted.\n"
         "**!removegifblockrole** — Remove the currently set GIF-blocked role.\n"
+        "**!showgifblockrole** — Show the currently set GIF-blocked role.\n"
         "**!help** — Show this help message.\n"
+        "\n**Additional Information:**\n"
+        "- **GIFs are automatically deleted** from members with the set role when sent as attachments, embeds, or links (e.g., Tenor).\n"
+        "- The bot will log all deleted GIF messages to a channel named **mod-logs**.\n"
     )
     await ctx.send(help_text)
 
