@@ -8,7 +8,8 @@ intents.message_content = True  # Needed to read messages
 intents.guilds = True
 intents.members = True  # Needed to check roles
 
-bot = commands.Bot(command_prefix="?", intents=intents)
+bot = bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
+
 
 # Stores {guild_id: role_id} for which role to block GIFs for
 gif_block_roles = {}
@@ -23,6 +24,39 @@ async def on_ready():
 async def setgifblockrole(ctx, role: discord.Role):
     gif_block_roles[ctx.guild.id] = role.id
     await ctx.send(f"✅ GIF block role set to: {role.mention}")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def removegifblockrole(ctx):
+    if ctx.guild.id in gif_block_roles:
+        removed_id = gif_block_roles.pop(ctx.guild.id)
+        await ctx.send(f"🧹 GIF block role removed (Role ID: `{removed_id}`).")
+    else:
+        await ctx.send("⚠️ No GIF block role is currently set for this server.")
+
+@bot.command()
+async def showgifblockrole(ctx):
+    role_id = gif_block_roles.get(ctx.guild.id)
+    if role_id:
+        role = ctx.guild.get_role(role_id)
+        await ctx.send(f"🎯 Current blocked role: {role.mention}")
+    else:
+        await ctx.send("❌ No GIF-blocked role set.")
+
+@bot.command(name="help")
+async def help_command(ctx):
+    help_text = (
+        "**📘 Bot Commands:**\n\n"
+        "**!setgifblockrole @Role** — Set a role whose messages containing GIFs will be auto-deleted.\n"
+        "**!removegifblockrole** — Remove the currently set GIF-blocked role.\n"
+        "**!help** — Show this help message.\n"
+    )
+    await ctx.send(help_text)
+
+# Inside your message deletion logic
+log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
+if log_channel:
+    await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n{message.content}")
 
 @bot.event
 async def on_message(message):
