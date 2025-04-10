@@ -5,21 +5,30 @@ from discord.ext import commands
 
 GIF_ROLE_FILE = "gif_roles.json"
 
-# Load existing data
-if os.path.exists(GIF_ROLE_FILE):
-    with open(GIF_ROLE_FILE, "r") as f:
-        gif_block_roles = json.load(f)
-        # Ensure each guild has a list (even if empty)
-        for guild_id in gif_block_roles:
-            if not isinstance(gif_block_roles[guild_id], list):
-                gif_block_roles[guild_id] = []
-else:
-    gif_block_roles = {}
+# Load existing data or initialize an empty dictionary
+def load_gif_roles():
+    if os.path.exists(GIF_ROLE_FILE):
+        with open(GIF_ROLE_FILE, "r") as f:
+            try:
+                gif_block_roles = json.load(f)
+                # Ensure each guild has a list (even if empty)
+                for guild_id in gif_block_roles:
+                    if not isinstance(gif_block_roles[guild_id], list):
+                        gif_block_roles[guild_id] = []
+                return gif_block_roles
+            except json.JSONDecodeError:
+                print("Error reading the JSON file. Initializing empty roles.")
+                return {}
+    else:
+        return {}
 
-# Define the function to save gif roles to the JSON file
+# Save the roles to the JSON file
 def save_gif_roles():
     with open(GIF_ROLE_FILE, "w") as f:
         json.dump(gif_block_roles, f, indent=4)
+
+# Load the gif_block_roles data
+gif_block_roles = load_gif_roles()
 
 print(discord.__version__)
 
@@ -28,7 +37,7 @@ intents.message_content = True  # Needed to read messages
 intents.guilds = True
 intents.members = True  # Needed to check roles
 
-bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 
 # Command to set the role that gets GIFs blocked
