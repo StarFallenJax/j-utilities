@@ -3,3 +3,4 @@
 
 features:
 > gif auto-deletion for users with a certain role (cough cough blueghost)
+> configuration and logging
