@@ -4,6 +4,10 @@
 features:
 > gif auto-deletion for users with a certain role
 
+> role adding and removal
+
+> message clearing
+
 > configuration and logging
 
 
