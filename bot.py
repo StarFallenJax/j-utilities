@@ -3,44 +3,57 @@ import json
 import os
 from discord.ext import commands
 
+
 GIF_ROLE_FILE = "gif_roles.json"
 
-# Load existing data or initialize an empty dictionary
+def get_gif_roles_file_path():
+    return os.path.abspath(GIF_ROLE_FILE)
+
+print(f"[DEBUG] Path to gif_roles.json: {get_gif_roles_file_path()}")
+
+
+
+def save_gif_roles():
+    try:
+        print(f"[DEBUG] Saving roles to {GIF_ROLE_FILE}...")
+        with open(GIF_ROLE_FILE, "w", encoding="utf-8") as f:
+            json.dump(gif_block_roles, f, indent=4)
+            print(f"[DEBUG] Roles saved successfully.")
+    except Exception as e:
+        print(f"[ERROR] Failed to save roles: {e}")
+
 def load_gif_roles():
-    if os.path.exists(GIF_ROLE_FILE):
-        with open(GIF_ROLE_FILE, "r") as f:
-            try:
+    try:
+        if os.path.exists(GIF_ROLE_FILE):
+            with open(GIF_ROLE_FILE, "r", encoding="utf-8") as f:
                 gif_block_roles = json.load(f)
-                # Ensure each guild has a list (even if empty)
-                for guild_id in gif_block_roles:
-                    if not isinstance(gif_block_roles[guild_id], list):
-                        gif_block_roles[guild_id] = []
-                return gif_block_roles
-            except json.JSONDecodeError:
-                print("Error reading the JSON file. Initializing empty roles.")
-                return {}
-    else:
+                print(f"[DEBUG] Successfully loaded roles: {gif_block_roles}")
+        else:
+            gif_block_roles = {}
+            print(f"[DEBUG] No existing file found. Initializing empty roles.")
+        return gif_block_roles
+    except Exception as e:
+        print(f"[ERROR] Error reading the JSON file: {e}")
         return {}
 
-# Save the roles to the JSON file
-def save_gif_roles():
-    with open(GIF_ROLE_FILE, "w") as f:
-        json.dump(gif_block_roles, f, indent=4)
+print(f"[DEBUG] Attempting to load GIF roles from {GIF_ROLE_FILE}")
+if os.path.exists(GIF_ROLE_FILE):
+    print(f"[DEBUG] File exists: {GIF_ROLE_FILE}")
+    gif_block_roles = load_gif_roles()
+else:
+    print(f"[ERROR] File not found: {GIF_ROLE_FILE}")
+    gif_block_roles = {1359611917320192190}
 
-# Load the gif_block_roles data
-gif_block_roles = load_gif_roles()
 
 print(discord.__version__)
 
 intents = discord.Intents.default()
-intents.message_content = True  # Needed to read messages
+intents.message_content = True
 intents.guilds = True
-intents.members = True  # Needed to check roles
+intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
-
-# Command to set the role that gets GIFs blocked
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setgifblockrole(ctx, *roles: discord.Role):
@@ -50,12 +63,11 @@ async def setgifblockrole(ctx, *roles: discord.Role):
     for role in roles:
         if role.id not in gif_block_roles[ctx.guild.id]:
             gif_block_roles[ctx.guild.id].append(role.id)
-    
+
     save_gif_roles()
     role_mentions = ', '.join([role.mention for role in roles])
     await ctx.send(f"✅ GIF block roles set to: {role_mentions}")
 
-# Command to remove the GIF block role
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def removegifblockrole(ctx, *roles: discord.Role):
@@ -65,7 +77,7 @@ async def removegifblockrole(ctx, *roles: discord.Role):
             if role.id in gif_block_roles[ctx.guild.id]:
                 gif_block_roles[ctx.guild.id].remove(role.id)
                 removed_roles.append(role)
-        
+
         if removed_roles:
             save_gif_roles()
             removed_mentions = ', '.join([role.mention for role in removed_roles])
@@ -75,7 +87,6 @@ async def removegifblockrole(ctx, *roles: discord.Role):
     else:
         await ctx.send("⚠️ No GIF block roles are currently set.")
 
-# Command to show the current GIF block roles
 @bot.command()
 async def showgifblockrole(ctx):
     if ctx.guild.id in gif_block_roles and gif_block_roles[ctx.guild.id]:
@@ -99,7 +110,6 @@ async def help_command(ctx):
         "- The bot will log all deleted GIF messages to a channel named **mod-logs**.\n"
     )
     await ctx.send(help_text)
-
 
 @bot.event
 async def on_message(message):
