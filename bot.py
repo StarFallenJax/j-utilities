@@ -200,23 +200,76 @@ async def viewroles(ctx):
 
 @bot.command(name="help")
 async def help_command(ctx):
-    help_text = (
-        "**📘 Bot Commands:**\n\n"
-        "**!addrole RoleName** — Adds an allowed role to yourself (users can add roles to themselves from the allowed list only).\n"
-        "**!removerole RoleName** — Removes an allowed role from yourself (users can remove roles from themselves from the allowed list only).\n"
-        "**!viewroles** — Shows the list of roles that you can assign or remove from yourself.\n"
-        "**!clear [amount]** — Clears a specified number of messages (only admins can use this command).\n"
-        "**!showgifblockrole** — Show the currently set GIF-blocked roles.\n"
-        "**!setgifblockrole @Role** — Set roles whose members' messages containing GIFs will be auto-deleted.\n"
-        "**!removegifblockrole @Role** — Removes a role from the GIF-blocking list.\n"
-        "**!help** — Show this help message.\n\n"
-        "**Additional Information:**\n"
-        "- **Assigning roles**: Users can add or remove roles for themselves, as long as the role is in the allowed `ASSIGNABLE_ROLES` list.\n"
-        "- **Removing roles**: Only admins can remove roles from other members, but users can remove roles from themselves if the role is in the allowed list.\n"
-        "- **GIF Blocking**: Roles can be set to block GIFs from members who have those roles. These messages will be deleted automatically.\n"
-        "- **Clear Command**: The `!clear` command allows admins to delete a specified number of messages from the current channel. It is limited to admins only."
+    # Create embed pages for different categories
+    general_commands = discord.Embed(
+        title="📘 Help - General Commands",
+        description=(
+            "**!addrole RoleName** — Adds an allowed role to yourself (users can add roles to themselves from the allowed list only).\n"
+            "**!removerole RoleName** — Removes an allowed role from yourself (users can remove roles from themselves from the allowed list only).\n"
+            "**!viewroles** — Shows the list of roles that you can assign or remove from yourself.\n"
+            "**!clear [amount]** — Clears a specified number of messages (only admins can use this command).\n"
+            "**!help** — Show this help message."
+        ),
+        color=discord.Color.blue()
     )
-    await ctx.send(help_text)
+
+    role_management = discord.Embed(
+        title="📘 Help - Role Management",
+        description=(
+            "**Assigning roles**: Users can add or remove roles for themselves, as long as the role is in the allowed `ASSIGNABLE_ROLES` list.\n"
+            "- **Only Admins** can remove roles from others.\n"
+        ),
+        color=discord.Color.green()
+    )
+
+    gif_blocking = discord.Embed(
+        title="📘 Help - GIF Blocking",
+        description=(
+            "**!showgifblockrole** — Show the currently set GIF-blocked roles.\n"
+            "**!setgifblockrole @Role** — Set roles whose members' messages containing GIFs will be auto-deleted.\n"
+            "**!removegifblockrole @Role** — Removes a role from the GIF-blocking list.\n"
+            "- **GIF Blocking**: Roles can be set to block GIFs from members who have those roles. These messages will be deleted automatically."
+        ),
+        color=discord.Color.red()
+    )
+
+    # Create a list of pages
+    pages = [general_commands, role_management, gif_blocking]
+    
+    # Send the first page
+    message = await ctx.send(embed=pages[0])
+
+    # Add reactions for navigation
+    await message.add_reaction("⬅️")
+    await message.add_reaction("➡️")
+
+    # Page navigation logic
+    current_page = 0
+
+    def check(reaction, user):
+        return user == ctx.author and str(reaction.emoji) in ["⬅️", "➡️"]
+
+    while True:
+        try:
+            # Wait for the user to react
+            reaction, user = await bot.wait_for("reaction_add", timeout=60.0, check=check)
+
+            # Navigate the pages based on the reactions
+            if str(reaction.emoji) == "➡️":
+                current_page = (current_page + 1) % len(pages)
+            elif str(reaction.emoji) == "⬅️":
+                current_page = (current_page - 1) % len(pages)
+
+            # Update the message with the new embed
+            await message.edit(embed=pages[current_page])
+
+            # Remove the reaction so the user can react again
+            await message.remove_reaction(reaction, user)
+
+        except asyncio.TimeoutError:
+            # If no reactions are received within the timeout period, stop the loop
+            await message.clear_reactions()
+            break
 
 
 
@@ -286,4 +339,4 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # Run the bot
-bot.run('token)
+bot.run('token')
