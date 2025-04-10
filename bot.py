@@ -16,8 +16,10 @@ if os.path.exists(GIF_ROLE_FILE):
 else:
     gif_block_roles = {}
 
-
-
+# Define the function to save gif roles to the JSON file
+def save_gif_roles():
+    with open(GIF_ROLE_FILE, "w") as f:
+        json.dump(gif_block_roles, f, indent=4)
 
 print(discord.__version__)
 
@@ -26,15 +28,8 @@ intents.message_content = True  # Needed to read messages
 intents.guilds = True
 intents.members = True  # Needed to check roles
 
-bot = bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
+bot = commands.Bot(command_prefix="?", intents=intents, help_command=None)
 
-
-# Stores {guild_id: role_id} for which role to block GIFs for
-gif_block_roles = {}
-
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user}')
 
 # Command to set the role that gets GIFs blocked
 @bot.command()
@@ -51,6 +46,7 @@ async def setgifblockrole(ctx, *roles: discord.Role):
     role_mentions = ', '.join([role.mention for role in roles])
     await ctx.send(f"✅ GIF block roles set to: {role_mentions}")
 
+# Command to remove the GIF block role
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def removegifblockrole(ctx, *roles: discord.Role):
@@ -70,7 +66,7 @@ async def removegifblockrole(ctx, *roles: discord.Role):
     else:
         await ctx.send("⚠️ No GIF block roles are currently set.")
 
-
+# Command to show the current GIF block roles
 @bot.command()
 async def showgifblockrole(ctx):
     if ctx.guild.id in gif_block_roles and gif_block_roles[ctx.guild.id]:
@@ -80,7 +76,7 @@ async def showgifblockrole(ctx):
     else:
         await ctx.send("❌ No GIF-blocked roles set.")
 
-
+# Show the help message
 @bot.command(name="help")
 async def help_command(ctx):
     help_text = (
@@ -94,6 +90,12 @@ async def help_command(ctx):
         "- The bot will log all deleted GIF messages to a channel named **mod-logs**.\n"
     )
     await ctx.send(help_text)
+
+
+# Inside your message deletion logic
+log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
+if log_channel:
+    await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n{message.content}")
 
 @bot.event
 async def on_message(message):
@@ -148,7 +150,6 @@ async def on_message(message):
             return
 
     await bot.process_commands(message)
-
 
 # Run the bot
 bot.run('MTM1OTYwNzU5NDIzNDE1NTE5OQ.Gp8qkf.kRigwfvJUirmemXe48fKmP3mtVb5jJBjHg1EyE')
