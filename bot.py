@@ -3,15 +3,12 @@ import json
 import os
 from discord.ext import commands
 
-
 GIF_ROLE_FILE = "gif_roles.json"
 
 def get_gif_roles_file_path():
     return os.path.abspath(GIF_ROLE_FILE)
 
 print(f"[DEBUG] Path to gif_roles.json: {get_gif_roles_file_path()}")
-
-
 
 def save_gif_roles():
     try:
@@ -26,24 +23,19 @@ def load_gif_roles():
     try:
         if os.path.exists(GIF_ROLE_FILE):
             with open(GIF_ROLE_FILE, "r", encoding="utf-8") as f:
-                gif_block_roles = json.load(f)
-                print(f"[DEBUG] Successfully loaded roles: {gif_block_roles}")
+                roles = json.load(f)
+                # Ensure guild ids are treated as strings (to match discord's format)
+                print(f"[DEBUG] Successfully loaded roles: {roles}")
+                return {str(guild_id): role_ids for guild_id, role_ids in roles.items()}
         else:
-            gif_block_roles = {}
             print(f"[DEBUG] No existing file found. Initializing empty roles.")
-        return gif_block_roles
+            return {}
     except Exception as e:
         print(f"[ERROR] Error reading the JSON file: {e}")
         return {}
 
-print(f"[DEBUG] Attempting to load GIF roles from {GIF_ROLE_FILE}")
-if os.path.exists(GIF_ROLE_FILE):
-    print(f"[DEBUG] File exists: {GIF_ROLE_FILE}")
-    gif_block_roles = load_gif_roles()
-else:
-    print(f"[ERROR] File not found: {GIF_ROLE_FILE}")
-    gif_block_roles = {1359611917320192190}
-
+# Initialize gif_block_roles from the JSON file
+gif_block_roles = load_gif_roles()
 
 print(discord.__version__)
 
@@ -54,15 +46,20 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
+@bot.event
+async def on_ready():
+    print(f'Bot Online')
+
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setgifblockrole(ctx, *roles: discord.Role):
-    if ctx.guild.id not in gif_block_roles:
-        gif_block_roles[ctx.guild.id] = []
+    """Sets the roles that will block GIFs for members with those roles."""
+    if str(ctx.guild.id) not in gif_block_roles:
+        gif_block_roles[str(ctx.guild.id)] = []
 
     for role in roles:
-        if role.id not in gif_block_roles[ctx.guild.id]:
-            gif_block_roles[ctx.guild.id].append(role.id)
+        if role.id not in gif_block_roles[str(ctx.guild.id)]:
+            gif_block_roles[str(ctx.guild.id)].append(role.id)
 
     save_gif_roles()
     role_mentions = ', '.join([role.mention for role in roles])
@@ -71,11 +68,12 @@ async def setgifblockrole(ctx, *roles: discord.Role):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def removegifblockrole(ctx, *roles: discord.Role):
-    if ctx.guild.id in gif_block_roles:
+    """Removes roles from the list that blocks GIFs."""
+    if str(ctx.guild.id) in gif_block_roles:
         removed_roles = []
         for role in roles:
-            if role.id in gif_block_roles[ctx.guild.id]:
-                gif_block_roles[ctx.guild.id].remove(role.id)
+            if role.id in gif_block_roles[str(ctx.guild.id)]:
+                gif_block_roles[str(ctx.guild.id)].remove(role.id)
                 removed_roles.append(role)
 
         if removed_roles:
@@ -89,8 +87,9 @@ async def removegifblockrole(ctx, *roles: discord.Role):
 
 @bot.command()
 async def showgifblockrole(ctx):
-    if ctx.guild.id in gif_block_roles and gif_block_roles[ctx.guild.id]:
-        roles = [ctx.guild.get_role(role_id) for role_id in gif_block_roles[ctx.guild.id]]
+    """Shows the roles currently blocking GIFs."""
+    if str(ctx.guild.id) in gif_block_roles and gif_block_roles[str(ctx.guild.id)]:
+        roles = [ctx.guild.get_role(role_id) for role_id in gif_block_roles[str(ctx.guild.id)]]
         role_mentions = ', '.join([role.mention for role in roles if role])  # Mention all valid roles
         await ctx.send(f"🎯 Current blocked roles: {role_mentions}")
     else:
@@ -113,13 +112,23 @@ async def help_command(ctx):
 
 @bot.event
 async def on_message(message):
+    """Handles messages to check for GIFs from members with blocked roles."""
     if message.author.bot or not message.guild:
         return  # Ignore bots and DMs
 
-    guild_id = message.guild.id
+    guild_id = str(message.guild.id)  # Ensure the guild_id is a string
     target_role_ids = gif_block_roles.get(guild_id, [])
 
-    if any(role.id in target_role_ids for role in message.author.roles):
+    # Debugging role ids
+    print(f"[DEBUG] Checking message from {message.author} in guild {message.guild.name}")
+    print(f"[DEBUG] Blocked role ids for this guild: {target_role_ids}")
+
+    # Check if the author has a GIF-blocking role
+    has_blocked_role = any(role.id in target_role_ids for role in message.author.roles)
+    print(f"[DEBUG] User {message.author} has a blocked role: {has_blocked_role}")
+
+    if has_blocked_role:
+        print(f"[DEBUG] User {message.author} has a blocked role. Checking for GIFs.")
         # Check for .gif in attachments
         for attachment in message.attachments:
             if attachment.content_type == "image/gif" or attachment.filename.endswith(".gif"):
@@ -127,7 +136,7 @@ async def on_message(message):
                 log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
                 if log_channel:
                     await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n{message.content}")
-                print(f'Deleted a gif message from {message.author}')
+                print(f'[DEBUG] Deleted GIF attachment from {message.author}')
                 return
 
         # Check for .gif in embeds
@@ -137,21 +146,21 @@ async def on_message(message):
                 log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
                 if log_channel:
                     await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n(embed image)")
-                print(f'Deleted a gif embed from {message.author}')
+                print(f'[DEBUG] Deleted GIF embed from {message.author}')
                 return
             if embed.video and embed.video.url and ".gif" in embed.video.url:
                 await message.delete()
                 log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
                 if log_channel:
                     await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n(embed video)")
-                print(f'Deleted a gif video from {message.author}')
+                print(f'[DEBUG] Deleted GIF video from {message.author}')
                 return
             if embed.url and ".gif" in embed.url:
                 await message.delete()
                 log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
                 if log_channel:
                     await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n(embed URL)")
-                print(f'Deleted a gif link from {message.author}')
+                print(f'[DEBUG] Deleted GIF link from {message.author}')
                 return
 
         # Check for Tenor links
@@ -160,9 +169,10 @@ async def on_message(message):
             log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
             if log_channel:
                 await log_channel.send(f"🧹 Deleted Tenor link from {message.author.mention} in {message.channel.mention}:\n{message.content}")
-            print(f'Deleted a Tenor link from {message.author}')
+            print(f'[DEBUG] Deleted Tenor link from {message.author}')
             return
 
+    # Allow the bot to process other commands
     await bot.process_commands(message)
 
 # Run the bot
