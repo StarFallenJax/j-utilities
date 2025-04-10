@@ -386,48 +386,48 @@ async def on_raw_reaction_add(payload):
 
             channel = bot.get_channel(payload.channel_id)
             message = await channel.fetch_message(payload.message_id)
+
             count = sum(1 for reaction in message.reactions if str(reaction.emoji) == emoji_str and reaction.count >= threshold)
 
             if count:
                 target_channel = bot.get_channel(channel_id)
-                
-                # Search for an existing starboard message in the target channel
+
                 async for msg in target_channel.history(limit=100):
                     if msg.author == bot.user and msg.embeds:
                         embed = msg.embeds[0]
-                        # Check if the message matches the original message
-                        if embed.description == message.content or embed.description == "No text":
-                            # Check if "Reaction Count" field exists
-                            field_exists = False
-                            for i, field in enumerate(embed.fields):
-                                if field.name == "Reaction Count":
-                                    field_exists = True
-                                    embed.set_field_at(i, name="Reaction Count", value=f"{count} reactions", inline=False)
-                                    break
-                            # If field doesn't exist, add it
-                            if not field_exists:
-                                embed.add_field(name="Reaction Count", value=f"{count} reactions", inline=False)
+                        original_msg_id_field = None
+                        for field in embed.fields:
+                            if field.name == "Original Message ID":
+                                original_msg_id_field = field
+                                break
 
-                            await msg.edit(embed=embed)
-                            print(f"[DEBUG] Updated starboard embed for message by {message.author}")
+                        if original_msg_id_field and original_msg_id_field.value == str(payload.message_id):
+                            embed.timestamp = message.created_at
+                            await msg.edit(content=f"{emoji_str} {count} reactions | {message.jump_url}\n", embed=embed)
+                            print(f"[DEBUG] Updated reaction count for starboard embed of message by {message.author}")
                             return
 
-                # If no existing message was found, create a new starboard message
                 embed = discord.Embed(
                     title="⭐ Starred Message",
                     description=message.content or "No text",
-                    color=discord.Color.gold()
+                    color=discord.Color.gold(),
+                    timestamp=message.created_at
                 )
                 embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
-                embed.add_field(name="Source", value=f"[Jump to message]({message.jump_url})")
+                embed.add_field(name="Source", value=message.jump_url)  # Correctly using jump_url for message link
                 if message.attachments:
                     embed.set_image(url=message.attachments[0].url)
 
-                # Add the reaction count to the embed
-                embed.add_field(name="Reaction Count", value=f"{count} reactions", inline=False)
+                embed.add_field(name="Original Message ID", value=str(payload.message_id), inline=False)
 
-                await target_channel.send(embed=embed)
+                await target_channel.send(content=f"{emoji_str} {count} reactions | {message.jump_url}\n", embed=embed)
                 print(f"[DEBUG] Created new starboard embed for message by {message.author}")
+
+
+
+
+
+
 
 
 
