@@ -8,7 +8,10 @@ features:
 
 > message clearing
 
+> starboards
+
 > configuration and logging
+
 
 
 
