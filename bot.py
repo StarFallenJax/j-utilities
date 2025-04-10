@@ -95,20 +95,130 @@ async def showgifblockrole(ctx):
     else:
         await ctx.send("❌ No GIF-blocked roles set.")
 
-# Show the help message
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def clear(ctx, amount: int):
+    """Clears the specified number of recent messages in the current channel and logs it to #mod-logs."""
+    if amount <= 0:
+        await ctx.send("⚠️ Please specify a number greater than 0.")
+        return
+
+    try:
+        deleted = await ctx.channel.purge(limit=amount + 1)  # +1 to include the command itself
+        confirmation = await ctx.send(f"🧹 Deleted {len(deleted) - 1} messages.", delete_after=5)
+
+        # Log to mod-logs channel
+        log_channel = discord.utils.get(ctx.guild.text_channels, name="mod-logs")
+        if log_channel:
+            await log_channel.send(
+                f"🧾 **Message Clear**\n"
+                f"**Moderator:** {ctx.author.mention}\n"
+                f"**Channel:** {ctx.channel.mention}\n"
+                f"**Messages Deleted:** {len(deleted) - 1}"
+            )
+        else:
+            print("[WARN] Could not find #mod-logs channel to log message deletions.")
+        
+        print(f"[DEBUG] {ctx.author} cleared {len(deleted) - 1} messages in #{ctx.channel.name}")
+    except discord.Forbidden:
+        await ctx.send("❌ I don't have permission to delete messages or access the mod-logs channel.")
+    except Exception as e:
+        await ctx.send(f"⚠️ Error: {e}")
+        
+# List of roles that can be assigned or removed using the commands
+ASSIGNABLE_ROLES = ["events", "d&d"]
+
+@bot.command()
+async def addrole(ctx, *, role_name: str):
+    """Adds an allowed role to the user (users can add roles to themselves from the allowed list only)."""
+    if role_name not in ASSIGNABLE_ROLES:
+        await ctx.send(f"❌ You’re not allowed to assign the `{role_name}` role.")
+        return
+
+    role = discord.utils.get(ctx.guild.roles, name=role_name)
+    if not role:
+        await ctx.send(f"❌ Role `{role_name}` not found.")
+        return
+
+    if role in ctx.author.roles:
+        await ctx.send(f"⚠️ You already have the `{role.name}` role.")
+        return
+
+    try:
+        await ctx.author.add_roles(role)
+        await ctx.send(f"✅ Added `{role.name}` to you.")
+
+        # Log to mod-logs
+        log_channel = discord.utils.get(ctx.guild.text_channels, name="mod-logs")
+        if log_channel:
+            await log_channel.send(
+                f"➕ **Role Added**\n"
+                f"**Moderator:** {ctx.author.mention}\n"
+                f"**User:** {ctx.author.mention}\n"
+                f"**Role:** `{role.name}`"
+            )
+    except discord.Forbidden:
+        await ctx.send("❌ I don't have permission to assign that role.")
+
+@bot.command()
+async def removerole(ctx, *, role_name: str):
+    """Removes an allowed role from the user (users can remove roles from themselves from the allowed list only)."""
+    if role_name not in ASSIGNABLE_ROLES:
+        await ctx.send(f"❌ You’re not allowed to remove the `{role_name}` role.")
+        return
+
+    role = discord.utils.get(ctx.guild.roles, name=role_name)
+    if not role:
+        await ctx.send(f"❌ Role `{role_name}` not found.")
+        return
+
+    if role not in ctx.author.roles:
+        await ctx.send(f"⚠️ You don't have the `{role.name}` role.")
+        return
+
+    try:
+        await ctx.author.remove_roles(role)
+        await ctx.send(f"✅ Removed `{role.name}` from you.")
+
+        # Log to mod-logs
+        log_channel = discord.utils.get(ctx.guild.text_channels, name="mod-logs")
+        if log_channel:
+            await log_channel.send(
+                f"➖ **Role Removed**\n"
+                f"**Moderator:** {ctx.author.mention}\n"
+                f"**User:** {ctx.author.mention}\n"
+                f"**Role:** `{role.name}`"
+            )
+    except discord.Forbidden:
+        await ctx.send("❌ I don't have permission to remove that role.")
+
+@bot.command()
+async def viewroles(ctx):
+    """Shows the list of roles that the user can assign or remove from themselves."""
+    roles_list = ', '.join(ASSIGNABLE_ROLES)
+    await ctx.send(f"✅ The roles you can assign or remove from yourself are: {roles_list}")
+
 @bot.command(name="help")
 async def help_command(ctx):
     help_text = (
         "**📘 Bot Commands:**\n\n"
-        "**!setgifblockrole @Role** — Set a role whose messages containing GIFs will be auto-deleted.\n"
-        "**!removegifblockrole @Role** — Remove the currently set GIF-blocked role.\n"
+        "**!addrole RoleName** — Adds an allowed role to yourself (users can add roles to themselves from the allowed list only).\n"
+        "**!removerole RoleName** — Removes an allowed role from yourself (users can remove roles from themselves from the allowed list only).\n"
+        "**!viewroles** — Shows the list of roles that you can assign or remove from yourself.\n"
+        "**!clear [amount]** — Clears a specified number of messages (only admins can use this command).\n"
         "**!showgifblockrole** — Show the currently set GIF-blocked roles.\n"
-        "**!help** — Show this help message.\n"
-        "\n**Additional Information:**\n"
-        "- **GIFs are automatically deleted** from members with the set role when sent as attachments, embeds, or links (e.g., Tenor).\n"
-        "- The bot will log all deleted GIF messages to a channel named **mod-logs**.\n"
+        "**!setgifblockrole @Role** — Set roles whose members' messages containing GIFs will be auto-deleted.\n"
+        "**!removegifblockrole @Role** — Removes a role from the GIF-blocking list.\n"
+        "**!help** — Show this help message.\n\n"
+        "**Additional Information:**\n"
+        "- **Assigning roles**: Users can add or remove roles for themselves, as long as the role is in the allowed `ASSIGNABLE_ROLES` list.\n"
+        "- **Removing roles**: Only admins can remove roles from other members, but users can remove roles from themselves if the role is in the allowed list.\n"
+        "- **GIF Blocking**: Roles can be set to block GIFs from members who have those roles. These messages will be deleted automatically.\n"
+        "- **Clear Command**: The `!clear` command allows admins to delete a specified number of messages from the current channel. It is limited to admins only."
     )
     await ctx.send(help_text)
+
+
 
 @bot.event
 async def on_message(message):
@@ -176,4 +286,4 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # Run the bot
-bot.run('TOKEN')
+bot.run('token)
