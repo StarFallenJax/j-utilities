@@ -390,6 +390,29 @@ async def on_raw_reaction_add(payload):
 
             if count:
                 target_channel = bot.get_channel(channel_id)
+                
+                # Search for an existing starboard message in the target channel
+                async for msg in target_channel.history(limit=100):
+                    if msg.author == bot.user and msg.embeds:
+                        embed = msg.embeds[0]
+                        # Check if the message matches the original message
+                        if embed.description == message.content or embed.description == "No text":
+                            # Check if "Reaction Count" field exists
+                            field_exists = False
+                            for i, field in enumerate(embed.fields):
+                                if field.name == "Reaction Count":
+                                    field_exists = True
+                                    embed.set_field_at(i, name="Reaction Count", value=f"{count} reactions", inline=False)
+                                    break
+                            # If field doesn't exist, add it
+                            if not field_exists:
+                                embed.add_field(name="Reaction Count", value=f"{count} reactions", inline=False)
+
+                            await msg.edit(embed=embed)
+                            print(f"[DEBUG] Updated starboard embed for message by {message.author}")
+                            return
+
+                # If no existing message was found, create a new starboard message
                 embed = discord.Embed(
                     title="⭐ Starred Message",
                     description=message.content or "No text",
@@ -400,8 +423,13 @@ async def on_raw_reaction_add(payload):
                 if message.attachments:
                     embed.set_image(url=message.attachments[0].url)
 
+                # Add the reaction count to the embed
+                embed.add_field(name="Reaction Count", value=f"{count} reactions", inline=False)
+
                 await target_channel.send(embed=embed)
-                print(f"[DEBUG] Starboard '{board_name}' triggered for message by {message.author}")
+                print(f"[DEBUG] Created new starboard embed for message by {message.author}")
+
+
 
 
 @bot.event
