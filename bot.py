@@ -24,7 +24,6 @@ def load_gif_roles():
         if os.path.exists(GIF_ROLE_FILE):
             with open(GIF_ROLE_FILE, "r", encoding="utf-8") as f:
                 roles = json.load(f)
-                # Ensure guild ids are treated as strings (to match discord's format)
                 print(f"[DEBUG] Successfully loaded roles: {roles}")
                 return {str(guild_id): role_ids for guild_id, role_ids in roles.items()}
         else:
@@ -218,7 +217,8 @@ async def clear(ctx, amount: int):
         await ctx.send("❌ I don't have permission to delete messages or access the mod-logs channel.")
     except Exception as e:
         await ctx.send(f"⚠️ Error: {e}")
-        
+
+
 # List of roles that can be assigned or removed using the commands
 ASSIGNABLE_ROLES = ["events", "d&d"]
 
