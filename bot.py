@@ -81,21 +81,16 @@ async def showgifblockrole(ctx):
 async def help_command(ctx):
     help_text = (
         "**📘 Bot Commands:**\n\n"
-        "**?setgifblockrole @Role** — Set a role whose messages containing GIFs will be auto-deleted.\n"
-        "**?removegifblockrole** — Remove the currently set GIF-blocked role.\n"
-        "**?showgifblockrole** — Show the currently set GIF-blocked role.\n"
-        "**?help** — Show this help message.\n"
+        "**!setgifblockrole @Role** — Set a role whose messages containing GIFs will be auto-deleted.\n"
+        "**!removegifblockrole** — Remove the currently set GIF-blocked role.\n"
+        "**!showgifblockrole** — Show the currently set GIF-blocked role.\n"
+        "**!help** — Show this help message.\n"
         "\n**Additional Information:**\n"
         "- **GIFs are automatically deleted** from members with the set role when sent as attachments, embeds, or links (e.g., Tenor).\n"
         "- The bot will log all deleted GIF messages to a channel named **mod-logs**.\n"
     )
     await ctx.send(help_text)
 
-
-# Inside your message deletion logic
-log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
-if log_channel:
-    await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n{message.content}")
 
 @bot.event
 async def on_message(message):
@@ -122,7 +117,7 @@ async def on_message(message):
                 await message.delete()
                 log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
                 if log_channel:
-                    await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n(embed)")
+                    await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n(embed image)")
                 print(f'Deleted a gif embed from {message.author}')
                 return
             if embed.video and embed.video.url and ".gif" in embed.video.url:
@@ -136,7 +131,7 @@ async def on_message(message):
                 await message.delete()
                 log_channel = discord.utils.get(message.guild.text_channels, name="mod-logs")
                 if log_channel:
-                    await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n(embed url)")
+                    await log_channel.send(f"🧹 Deleted GIF from {message.author.mention} in {message.channel.mention}:\n(embed URL)")
                 print(f'Deleted a gif link from {message.author}')
                 return
 
