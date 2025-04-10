@@ -37,6 +37,34 @@ def load_gif_roles():
 # Initialize gif_block_roles from the JSON file
 gif_block_roles = load_gif_roles()
 
+
+STARBOARD_FILE = "starboards.json"
+
+def get_starboard_file_path():
+    return os.path.abspath(STARBOARD_FILE)
+
+def load_starboards():
+    try:
+        if os.path.exists(STARBOARD_FILE):
+            with open(STARBOARD_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                print(f"[DEBUG] Loaded starboard config: {data}")
+                return data
+    except Exception as e:
+        print(f"[ERROR] Failed to load starboards: {e}")
+    return {}
+
+def save_starboards():
+    try:
+        with open(STARBOARD_FILE, "w", encoding="utf-8") as f:
+            json.dump(starboards, f, indent=4)
+        print("[DEBUG] Starboard config saved.")
+    except Exception as e:
+        print(f"[ERROR] Failed to save starboards: {e}")
+
+starboards = load_starboards()
+
+
 print(discord.__version__)
 
 intents = discord.Intents.default()
@@ -49,6 +77,72 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 @bot.event
 async def on_ready():
     print(f'Bot Online')
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def starboard(ctx, board_name: str, subcommand: str, *args):
+    guild_id = str(ctx.guild.id)
+    if guild_id not in starboards:
+        starboards[guild_id] = {}
+
+    if subcommand == "create":
+        if board_name not in starboards[guild_id]:
+            starboards[guild_id][board_name] = {}
+            save_starboards()
+            await ctx.send(f"✅ Starboard '{board_name}' created.")
+        else:
+            await ctx.send("⚠️ That starboard already exists.")
+
+    elif subcommand == "delete":
+        if board_name in starboards[guild_id]:
+            del starboards[guild_id][board_name]
+            save_starboards()
+            await ctx.send(f"🗑️ Deleted starboard '{board_name}'.")
+        else:
+            await ctx.send("❌ Starboard does not exist.")
+
+    elif subcommand == "add":
+        if board_name not in starboards[guild_id]:
+            await ctx.send("❌ Starboard not found.")
+            return
+        if args[0] == "reaction" and len(args) == 3:
+            emoji, threshold = args[1], int(args[2])
+            starboards[guild_id][board_name][emoji] = starboards[guild_id][board_name].get(emoji, {})
+            starboards[guild_id][board_name][emoji]["threshold"] = threshold
+            save_starboards()
+            await ctx.send(f"⭐ Reaction '{emoji}' set with threshold {threshold} for starboard '{board_name}'.")
+        elif args[0] == "channel" and len(args) == 2:
+            channel = discord.utils.get(ctx.guild.text_channels, name=args[1]) or ctx.guild.get_channel(int(args[1]))
+            if not channel:
+                await ctx.send("❌ Channel not found.")
+                return
+            for emoji in starboards[guild_id][board_name]:
+                starboards[guild_id][board_name][emoji]["channel_id"] = channel.id
+            save_starboards()
+            await ctx.send(f"📌 Channel set to {channel.mention} for starboard '{board_name}'.")
+
+    elif subcommand == "remove":
+        if board_name not in starboards[guild_id]:
+            await ctx.send("❌ Starboard not found.")
+            return
+        if args[0] == "reaction" and len(args) == 2:
+            emoji = args[1]
+            if emoji in starboards[guild_id][board_name]:
+                del starboards[guild_id][board_name][emoji]
+                save_starboards()
+                await ctx.send(f"🧹 Removed emoji '{emoji}' from starboard '{board_name}'.")
+            else:
+                await ctx.send("⚠️ Emoji not found in that starboard.")
+        elif args[0] == "channel":
+            for emoji in starboards[guild_id][board_name]:
+                if "channel_id" in starboards[guild_id][board_name][emoji]:
+                    del starboards[guild_id][board_name][emoji]["channel_id"]
+            save_starboards()
+            await ctx.send(f"🧼 Removed output channel from starboard '{board_name}'.")
+
+    else:
+        await ctx.send("❌ Unknown subcommand.")
+
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -271,6 +365,43 @@ async def help_command(ctx):
             await message.clear_reactions()
             break
 
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    if payload.guild_id is None or payload.member.bot:
+        return
+
+    guild_id = str(payload.guild_id)
+    if guild_id not in starboards:
+        return
+
+    for board_name, emoji_map in starboards[guild_id].items():
+        emoji_str = str(payload.emoji)
+        if emoji_str in emoji_map:
+            threshold = emoji_map[emoji_str].get("threshold", 2)
+            channel_id = emoji_map[emoji_str].get("channel_id")
+            if not channel_id:
+                print(f"[DEBUG] No channel configured for starboard '{board_name}' emoji '{emoji_str}'")
+                return
+
+            channel = bot.get_channel(payload.channel_id)
+            message = await channel.fetch_message(payload.message_id)
+            count = sum(1 for reaction in message.reactions if str(reaction.emoji) == emoji_str and reaction.count >= threshold)
+
+            if count:
+                target_channel = bot.get_channel(channel_id)
+                embed = discord.Embed(
+                    title="⭐ Starred Message",
+                    description=message.content or "No text",
+                    color=discord.Color.gold()
+                )
+                embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
+                embed.add_field(name="Source", value=f"[Jump to message]({message.jump_url})")
+                if message.attachments:
+                    embed.set_image(url=message.attachments[0].url)
+
+                await target_channel.send(embed=embed)
+                print(f"[DEBUG] Starboard '{board_name}' triggered for message by {message.author}")
 
 
 @bot.event
