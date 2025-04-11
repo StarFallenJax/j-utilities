@@ -1,7 +1,39 @@
 import discord
 import json
 import os
+import asyncio
 from discord.ext import commands
+import sqlite3
+import atexit
+
+# Initialize SQLite database
+def init_db():
+    conn = sqlite3.connect('starboard.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS starboard_messages (
+            original_msg_id INTEGER PRIMARY KEY,
+            starboard_msg_id INTEGER,
+            guild_id INTEGER
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Run at startup
+init_db()
+
+# Create connection pool
+def get_db():
+    conn = sqlite3.connect('starboard.db')
+    conn.row_factory = sqlite3.Row  # Enable dict-like access
+    return conn
+
+# Close all connections on exit
+@atexit.register
+def close_db():
+    if 'db' in globals():
+        globals()['db'].close()
 
 GIF_ROLE_FILE = "gif_roles.json"
 
@@ -365,10 +397,12 @@ async def help_command(ctx):
             await message.clear_reactions()
             break
 
+# Add this at the top of your file (with other global variables)
+starboard_messages = {}  # Format: {message_id: starboard_message_id}
 
 @bot.event
 async def on_raw_reaction_add(payload):
-    if payload.guild_id is None or payload.member.bot:
+    if payload.guild_id is None:
         return
 
     guild_id = str(payload.guild_id)
@@ -387,49 +421,70 @@ async def on_raw_reaction_add(payload):
             channel = bot.get_channel(payload.channel_id)
             message = await channel.fetch_message(payload.message_id)
 
-            count = sum(1 for reaction in message.reactions if str(reaction.emoji) == emoji_str and reaction.count >= threshold)
+            # Count reactions
+            reaction_count = 0
+            for reaction in message.reactions:
+                if str(reaction.emoji) == emoji_str:
+                    users = [user async for user in reaction.users() if not user.bot]
+                    reaction_count = len(users)
+                    break
 
-            if count:
-                target_channel = bot.get_channel(channel_id)
+            if reaction_count < threshold:
+                return
 
-                async for msg in target_channel.history(limit=100):
-                    if msg.author == bot.user and msg.embeds:
-                        embed = msg.embeds[0]
-                        original_msg_id_field = None
-                        for field in embed.fields:
-                            if field.name == "Original Message ID":
-                                original_msg_id_field = field
-                                break
+            target_channel = bot.get_channel(channel_id)
+            db = get_db()
 
-                        if original_msg_id_field and original_msg_id_field.value == str(payload.message_id):
-                            embed.timestamp = message.created_at
-                            await msg.edit(content=f"{emoji_str} {count} reactions | {message.jump_url}\n", embed=embed)
-                            print(f"[DEBUG] Updated reaction count for starboard embed of message by {message.author}")
-                            return
+            # Check for existing entry
+            cursor = db.cursor()
+            cursor.execute(
+                'SELECT starboard_msg_id FROM starboard_messages WHERE original_msg_id = ? AND guild_id = ?',
+                (message.id, payload.guild_id)
+            )
+            existing = cursor.fetchone()
 
-                embed = discord.Embed(
-                    title="⭐ Starred Message",
-                    description=message.content or "No text",
-                    color=discord.Color.gold(),
-                    timestamp=message.created_at
+            # Prepare message content
+            top_line = f"{emoji_str} **{reaction_count}** | https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}"
+            embed = discord.Embed(
+                description=message.content or "No text",
+                color=discord.Color.gold(),
+                timestamp=message.created_at
+            )
+            embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
+            embed.set_footer(text="Original message sent")
+
+            if message.attachments:
+                embed.set_image(url=message.attachments[0].url)
+
+            if existing:
+                try:
+                    starboard_msg = await target_channel.fetch_message(existing['starboard_msg_id'])
+                    await starboard_msg.edit(content=top_line, embed=embed)
+                    print(f"[DEBUG] Updated starboard message for {message.author}")
+                except discord.NotFound:
+                    # Message was deleted, create new one
+                    starboard_msg = await target_channel.send(content=top_line, embed=embed)
+                    cursor.execute(
+                        'UPDATE starboard_messages SET starboard_msg_id = ? WHERE original_msg_id = ? AND guild_id = ?',
+                        (starboard_msg.id, message.id, payload.guild_id)
+                    )
+                    db.commit()
+            else:
+                starboard_msg = await target_channel.send(content=top_line, embed=embed)
+                cursor.execute(
+                    'INSERT INTO starboard_messages VALUES (?, ?, ?)',
+                    (message.id, starboard_msg.id, payload.guild_id)
                 )
-                embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
-                embed.add_field(name="Source", value=message.jump_url)  # Correctly using jump_url for message link
-                if message.attachments:
-                    embed.set_image(url=message.attachments[0].url)
+                db.commit()
+                
+                # Handle URL previews only for new messages
+                if message.content and ("http://" in message.content or "https://" in message.content):
+                    urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', message.content)
+                    if urls:
+                        await target_channel.send("\n".join(urls))
 
-                embed.add_field(name="Original Message ID", value=str(payload.message_id), inline=False)
-
-                await target_channel.send(content=f"{emoji_str} {count} reactions | {message.jump_url}\n", embed=embed)
-                print(f"[DEBUG] Created new starboard embed for message by {message.author}")
-
-
-
-
-
-
-
-
+            print(f"[DEBUG] Starboard '{board_name}' triggered for message by {message.author}")
+            db.close()  # Close connection after use
 
 
 @bot.event
