@@ -352,12 +352,12 @@ async def help_command(ctx):
     starboard_commands = discord.Embed(
         title="📘 Help - Starboard",
         description=(
-            "**!starboard create <name>** - Creates new starboard\n"
-            "**!starboard delete <name>** - Deletes starboard\n"
-            "**!starboard add reaction <emoji> <threshold>** - Adds reaction to starboard\n"
-            "**!starboard add channel <channel>** - Sets starboard channel\n"
-            "**!starboard remove reaction <emoji>** - Removes reaction\n"
-            "**!starboard remove channel** - Removes output channel\n"
+            "**!starboard <name> create** - Creates new starboard\n"
+            "**!starboard <name> delete** - Deletes starboard\n"
+            "**!starboard <name> add reaction <emoji> <threshold>** - Adds reaction to starboard\n"
+            "**!starboard <name> add channel <channel>** - Sets starboard channel\n"
+            "**!starboard <name> remove reaction <emoji>** - Removes reaction\n"
+            "**!starboard <name> remove channel** - Removes output channel\n"
             "**!viewstarboards** - Lists all starboards and their settings\n"
             "\n*Admins only* - Manages message highlight system."
         ),
