@@ -327,40 +327,55 @@ async def viewroles(ctx):
 @bot.command(name="help")
 async def help_command(ctx):
     # Create embed pages for different categories
-    general_commands = discord.Embed(
-        title="📘 Help - General Commands",
+    gif_commands = discord.Embed(
+        title="📘 Help - GIF Management",
         description=(
-            "**!addrole RoleName** — Adds an allowed role to yourself (users can add roles to themselves from the allowed list only).\n"
-            "**!removerole RoleName** — Removes an allowed role from yourself (users can remove roles from themselves from the allowed list only).\n"
-            "**!viewroles** — Shows the list of roles that you can assign or remove from yourself.\n"
-            "**!clear [amount]** — Clears a specified number of messages (only admins can use this command).\n"
-            "**!help** — Show this help message."
-        ),
-        color=discord.Color.blue()
-    )
-
-    role_management = discord.Embed(
-        title="📘 Help - Role Management",
-        description=(
-            "**Assigning roles**: Users can add or remove roles for themselves, as long as the role is in the allowed `ASSIGNABLE_ROLES` list.\n"
-            "- **Only Admins** can remove roles from others.\n"
-        ),
-        color=discord.Color.green()
-    )
-
-    gif_blocking = discord.Embed(
-        title="📘 Help - GIF Blocking",
-        description=(
-            "**!showgifblockrole** — Show the currently set GIF-blocked roles.\n"
-            "**!setgifblockrole @Role** — Set roles whose members' messages containing GIFs will be auto-deleted.\n"
-            "**!removegifblockrole @Role** — Removes a role from the GIF-blocking list.\n"
-            "- **GIF Blocking**: Roles can be set to block GIFs from members who have those roles. These messages will be deleted automatically."
+            "**!showgifblockrole** - Shows currently blocked roles from sending GIFs\n"
+            "**!setgifblockrole @Role** - Blocks GIFs from members with specified role\n"
+            "**!removegifblockrole @Role** - Removes GIF block from specified role\n"
+            "\n*Admins only* - These commands manage which roles are blocked from sending GIFs."
         ),
         color=discord.Color.red()
     )
 
+    role_commands = discord.Embed(
+        title="📘 Help - Role Management",
+        description=(
+            "**!addrole RoleName** - Adds an allowed role to yourself\n"
+            "**!removerole RoleName** - Removes an allowed role from yourself\n"
+            "**!viewroles** - Shows list of self-assignable roles\n"
+            "\nAvailable roles: " + ", ".join(ASSIGNABLE_ROLES)
+        ),
+        color=discord.Color.green()
+    )
+
+    starboard_commands = discord.Embed(
+        title="📘 Help - Starboard",
+        description=(
+            "**!starboard create <name>** - Creates new starboard\n"
+            "**!starboard delete <name>** - Deletes starboard\n"
+            "**!starboard add reaction <emoji> <threshold>** - Adds reaction to starboard\n"
+            "**!starboard add channel <channel>** - Sets starboard channel\n"
+            "**!starboard remove reaction <emoji>** - Removes reaction\n"
+            "**!starboard remove channel** - Removes output channel\n"
+            "**!viewstarboards** - Lists all starboards and their settings\n"
+            "\n*Admins only* - Manages message highlight system."
+        ),
+        color=discord.Color.gold()
+    )
+
+    misc_commands = discord.Embed(
+        title="📘 Help - Miscellaneous",
+        description=(
+            "**!clear <amount>** - Deletes specified number of messages\n"
+            "**!help** - Shows this help message\n"
+            "\n*Clear command requires admin permissions*"
+        ),
+        color=discord.Color.blue()
+    )
+
     # Create a list of pages
-    pages = [general_commands, role_management, gif_blocking]
+    pages = [gif_commands, role_commands, starboard_commands, misc_commands]
     
     # Send the first page
     message = await ctx.send(embed=pages[0])
@@ -397,6 +412,38 @@ async def help_command(ctx):
             await message.clear_reactions()
             break
 
+            
+            
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def viewstarboards(ctx):
+    """Lists all starboards and their settings in the server."""
+    guild_id = str(ctx.guild.id)
+    if guild_id not in starboards or not starboards[guild_id]:
+        await ctx.send("❌ No starboards configured for this server.")
+        return
+
+    embed = discord.Embed(
+        title=f"⭐ Starboards in {ctx.guild.name}",
+        color=discord.Color.gold()
+    )
+
+    for board_name, settings in starboards[guild_id].items():
+        board_info = []
+        for emoji, emoji_settings in settings.items():
+            channel = ctx.guild.get_channel(emoji_settings.get("channel_id", 0))
+            channel_info = f"→ {channel.mention}" if channel else "→ *No channel set*"
+            board_info.append(
+                f"**{emoji}** (Threshold: {emoji_settings.get('threshold', 2)}) {channel_info}"
+            )
+        
+        embed.add_field(
+            name=f"📌 {board_name}",
+            value="\n".join(board_info) if board_info else "No reactions configured",
+            inline=False
+        )
+
+    await ctx.send(embed=embed)
 # Add this at the top of your file (with other global variables)
 starboard_messages = {}  # Format: {message_id: starboard_message_id}
 
