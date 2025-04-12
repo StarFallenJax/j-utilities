@@ -10,7 +10,11 @@ features:
 
 > starboards
 
+> json and database support
+
 > configuration and logging
+
+> maybe more features if i feel like it
 
 
 
