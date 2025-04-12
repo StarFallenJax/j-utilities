@@ -1,5 +1,5 @@
 # j-utilities
-### a discord utility bot used for a group chat
+### a discord utility bot for small group chats.
 
 features:
 > gif auto-deletion for users with a certain role
