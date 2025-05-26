@@ -5,6 +5,10 @@ import asyncio
 from discord.ext import commands
 import sqlite3
 import atexit
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from pytz import timezone
+from datetime import datetime
+from collections import defaultdict
 
 # Initialize SQLite database
 def init_db():
@@ -105,9 +109,109 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
+BIRTHDAY_FILE = "birthdays.json"
+ANNOUNCEMENT_CHANNEL_ID = 1018950323102027806  # Replace with your actual channel ID
+
+def load_birthdays():
+    try:
+        with open(BIRTHDAY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[ERROR] Failed to load birthdays: {e}")
+        return {}
+
+async def birthday_check():
+    now = datetime.now(timezone("US/Pacific"))
+    today = now.strftime("%m-%d")
+    birthdays = load_birthdays()
+
+    if today in birthdays:
+        names = birthdays[today]
+        channel = bot.get_channel(ANNOUNCEMENT_CHANNEL_ID)
+        if channel:
+            for name in names:
+                await channel.send(f"🥳 happy birthday to **{name}**!")
+                print(f"[DEBUG] Sent birthday message for {name}")
+        else:
+            print("[WARN] Announcement channel not found.")
+    else:
+        print(f"[DEBUG] No birthdays today ({today})")
+
+
 @bot.event
 async def on_ready():
-    print(f'Bot Online')
+    print("Bot Online")
+
+    # Schedule the birthday job
+    scheduler = AsyncIOScheduler(timezone="US/Pacific")
+    scheduler.add_job(birthday_check, "cron", hour=0, minute=0)
+    scheduler.start()
+
+    
+@bot.command()
+async def birthdays(ctx):
+    """Shows a paginated list of all birthdays."""
+    try:
+        with open("birthdays.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        await ctx.send(f"⚠️ Failed to load birthday data: {e}")
+        return
+
+    # Organize by month name
+    months = [
+        ("January", "⛄"), ("February", "💌"), ("March", "🍀"), ("April", "☂️"),
+        ("May", "🌷"), ("June", "🏖️"), ("July", "🎆"), ("August", "📚"),
+        ("September", "🍁"), ("October", "🎃"), ("November", "🦃"), ("December", "🎄")
+    ]
+
+    birthday_by_month = defaultdict(list)
+    for date, names in data.items():
+        month = int(date.split("-")[0])
+        for name in names:
+            birthday_by_month[month].append((date, name))
+
+    # Create a page (embed) for each month with birthdays
+    pages = []
+    for i, (month_name, emoji) in enumerate(months, start=1):
+        entries = birthday_by_month.get(i, [])
+        description = "\n".join([f"- {name} — {datetime.strptime(date, '%m-%d').strftime('%b %d')}" for date, name in sorted(entries)]) or "*No birthdays this month.*"
+
+        embed = discord.Embed(
+            title=f"🎂 Birthdays — {month_name} {emoji}",
+            description=description,
+            color=discord.Color.purple()
+        )
+        embed.set_footer(text=f"Page {i} of {len(months)}")
+        pages.append(embed)
+
+    # Send first page
+    current_month = datetime.now().month
+    current_page = current_month - 1
+    message = await ctx.send(embed=pages[current_page])
+
+    await message.add_reaction("⬅️")
+    await message.add_reaction("➡️")
+
+    def check(reaction, user):
+        return user == ctx.author and str(reaction.emoji) in ["⬅️", "➡️"] and reaction.message.id == message.id
+
+    while True:
+        try:
+            reaction, user = await bot.wait_for("reaction_add", timeout=60.0, check=check)
+
+            if str(reaction.emoji) == "➡️":
+                current_page = (current_page + 1) % len(pages)
+            elif str(reaction.emoji) == "⬅️":
+                current_page = (current_page - 1) % len(pages)
+
+            await message.edit(embed=pages[current_page])
+            await message.remove_reaction(reaction, user)
+
+        except asyncio.TimeoutError:
+            await message.clear_reactions()
+            break
+
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -368,6 +472,7 @@ async def help_command(ctx):
         title="📘 Help - Miscellaneous",
         description=(
             "**!clear <amount>** - Deletes specified number of messages\n"
+            "**!birthdays** - Shows the list of meadow birthdays\n"
             "**!help** - Shows this help message\n"
             "\n*Clear command requires admin permissions*"
         ),
@@ -600,4 +705,4 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # Run the bot
-bot.run('token')
+bot.run('TOKEN')
