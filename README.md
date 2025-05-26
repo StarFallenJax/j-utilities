@@ -10,6 +10,8 @@ features:
 
 > starboards
 
+> birthday reminders
+
 > json and database support
 
 > configuration and logging
