@@ -2,7 +2,7 @@
 ### a discord utility bot for small group chats.
 
 features:
-> gif auto-deletion for users with a certain role
+> gif auto-deletion for users with a certain role (its a crime to be unfunny)
 
 > role adding and removal
 
